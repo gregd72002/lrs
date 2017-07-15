@@ -1,4 +1,5 @@
 - On freshly flshed TX device - speed = 19200, after 57600
+- On freshly flshed RX device - speed = 19200, after 19200
 - on start, send discovery (test connection)
 
 2.35a
@@ -241,9 +242,11 @@ TX message 1:
 		- 0x01 - normal pin-out
 		- 0x02 - lrsmax
 		- 0x00 - Sponge board
-	- 145-146: padding? (ff:10)
+	- 145: RSSI channel (0xff=analogue, 0x0f=on channel 0x0f (15))
+	- 146: padding? (0x10)
 	- 147: buzzer (0=mutted,1=on)
-	- 148-160: padding? (0x00)
+	- 148: PPM normal/inverted (0x00=normal, 0x01=inverted)
+	- 149-160: padding? (0x00)
 
 
 
@@ -263,9 +266,11 @@ Params set: (sent 4 times)
 	- 12: TX (0x54) vs RX (0x52)
 	- 13-28: channel mapping 
 	- 29: ppm pinout 0x02: lrsmax, 0x01:normal, 0x00:sponge
-	- 30-31: 0xff 0x10 
+	- 30: RSSI channel (0xff=analogue, 0x0f=on channel 0x0f (15)) 
+	- 31: 0x10 
 	- 32: buzzer (0x01=on, 0x00=mutted)
-	- 33-46: 0x00 (padding) ??
+	- 33: PPM normal/inverted (0x00=normal, 0x01=inverted)
+	- 34-46: 0x00 (padding) ??
 	- 46-47: bind code 
 
 
