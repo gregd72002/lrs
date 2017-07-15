@@ -192,7 +192,7 @@ TX message 1:
 	- 52-83 servo values for each of 16 servos (2 bytes each, value shifted 1 byte (servo=v/2))
 	
 	- 84-91: (0x00) ??
-		TX: 00000000
+		TX: 00:00:00:00:00:00:00:00
 		RX: B9140000
 		0s work too
 	- 92-95 & 96-99: ?? 
@@ -239,9 +239,11 @@ TX message 1:
 		- value=channel to map to (0x00 = channel 1)
 	- 144: PPM Pin
 		- 0x01 - normal pin-out
+		- 0x02 - lrsmax
 		- 0x00 - Sponge board
-		
-	- 145-160: padding? (0x00)
+	- 145-146: padding? (ff:10)
+	- 147: buzzer (0=mutted,1=on)
+	- 148-160: padding? (0x00)
 
 
 
