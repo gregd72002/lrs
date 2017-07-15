@@ -71,13 +71,22 @@ struct s_status {
 	uint16_t bind_code; //bind code (big-int)
 	uint8_t failsafe;
 	uint8_t servo_map[16]; //target servo for each of 0...15 servos
-	uint8_t ppm_pin; //0x00=Sponge board/ULRS Mini; 0x01=Normal pinout
+	uint8_t ppm_pin; //0x00=Sponge board/ULRS Mini; 0x01=Normal pinout; 0x02=LRSMAX
+	uint8_t rssi_ch; //0xff=as PWM, 0x0f as PPM (channel 15) 
+	uint8_t buzzer; //0x00=mutted, 0x01=on
+	uint8_t ppm_mode; //0x00=normal, 0x01=inverted
 };
 
 #define MODE_TX (0x54)
 #define MODE_RX (0x52)
 #define PPM_SPONGE (0x00)
-#define PPM_NORMAL (0x00)
+#define PPM_NORMAL (0x01)
+#define PPM_LRSMAX (0x02)
+#define BUZZER_OFF (0x00)
+#define BUZZER_ON (0x01)
+#define PPM_MODE_INVERTED (0x01)
+#define PPM_MODE_NORMAL (0x00)
+#define RSSI_AS_PWM (0xff)
 #define FAILSAFE_ON (0x01)
 #define FAILSAFE_OFF (0x00)
 
@@ -137,6 +146,12 @@ void status_parse(struct s_status *s ,uint8_t *buf) {
 		memcpy(s->servo_map+i,buf+128+i,1);
 
 	memcpy(&s->ppm_pin,buf+144,1);
+
+	memcpy(&s->rssi_ch,buf+145,1);
+
+	memcpy(&s->buzzer,buf+147,1);
+
+	memcpy(&s->ppm_mode,buf+148,1);
 	
 }
 
@@ -171,6 +186,7 @@ void status_print(struct s_status *s) {
 	else printf("\tMode: Unknown\n");
 
 	if (s->ppm_pin==PPM_SPONGE) printf("\tPPM Pin: Sponge board/ULRS Mini\n");
+	else if (s->ppm_pin==PPM_LRSMAX) printf("\tPPM Pin: LRSMAX\n");
 	else if (s->ppm_pin==PPM_NORMAL) printf("\tPPM Pin: Normal pinout\n");
 	else printf("\tPPM Pin: Unknown\n");
 
@@ -180,6 +196,21 @@ void status_print(struct s_status *s) {
 	else if (s->failsafe==FAILSAFE_OFF) printf("\tFailsafe: off\n");
 	else printf("\tFailsafe: Unknown\n");
 
+	printf("\tRSSI channel: ");
+	if (s->rssi_ch==RSSI_AS_PWM) printf("dedicated PWM\n");
+	else printf("%i\n",s->rssi_ch);
+
+	printf("\tBuzzer: ");
+	if (s->buzzer==BUZZER_ON) printf("On\n");
+	else if (s->buzzer==BUZZER_OFF) printf("Off\n");
+	else printf("Unknown!\n");
+
+	printf("\tPPM Mode (normal/inverted): ");
+	if (s->ppm_mode==PPM_MODE_NORMAL) printf("Normal\n");
+	else if (s->ppm_mode==PPM_MODE_INVERTED) printf("Inverted\n");
+	else printf("Unknown!\n");
+
+
 }
 
 struct s_param {
@@ -188,9 +219,12 @@ struct s_param {
 	uint8_t ch[5]; //actual channel frequency (0x00-0xFF); 0x00=432.000MHz; 0xFF=470.250MHz; Spacing=0.150MHz
 	uint8_t mode; //TX=0x54; RX=0x52
 	uint8_t servo_map[16]; //target servo for each of 0...15 servos
-	uint8_t ppm_pin; //0x00=Sponge board/ULRS Mini; 0x01=Normal pinout
+	uint8_t ppm_pin; //0x00=Sponge board/ULRS Mini; 0x01=Normal pinout; 0x02=LRSMAX
 	//padding 16 bytes
 	uint16_t bind_code; //bind code (big-int)
+	uint8_t rssi_ch;
+	uint8_t buzzer;
+	uint8_t ppm_mode;
 };
 
 void catch_signal(int sig)
@@ -320,6 +354,9 @@ void param_set_defaults(struct s_param *p) {
 	p->ch[4]=0xb6;
 	p->ppm_pin=PPM_SPONGE;
 	p->mode=MODE_TX;
+	p->buzzer=BUZZER_ON;
+	p->rssi_ch=RSSI_AS_PWM;
+	p->ppm_mode=PPM_MODE_NORMAL;
 
 }
 
@@ -353,6 +390,19 @@ void param_print(struct s_param *p) {
 
 	printf("\tBind code: %u\n",p->bind_code);
 
+	printf("\tRSSI channel: ");
+	if (p->rssi_ch==RSSI_AS_PWM) printf("dedicated PWM\n");
+	else printf("%i\n",p->rssi_ch);
+
+	printf("\tBuzzer: ");
+	if (p->buzzer==BUZZER_ON) printf("On\n");
+	else if (p->buzzer==BUZZER_OFF) printf("Off\n");
+	else printf("Unknown!\n");
+
+	printf("\tPPM Mode (normal/inverted): ");
+	if (p->ppm_mode==PPM_MODE_NORMAL) printf("Normal\n");
+	else if (p->ppm_mode==PPM_MODE_INVERTED) printf("Inverted\n");
+	else printf("Unknown!\n");
 }
 
 uint8_t param_serialize(struct s_param *param, uint8_t *target, uint8_t *len) {
