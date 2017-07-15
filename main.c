@@ -1,4 +1,4 @@
-//ULRS 2.33
+//2.35a
 #include <stdint.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -231,7 +231,7 @@ uint32_t crc32(unsigned char const *addr, size_t num)
 
 		crc ^= (uint32_t)(b << 24); /* move byte into MSB of 32bit CRC */
 
-		for (int i = 0; i < 8; i++) {
+		for (i = 0; i < 8; i++) {
 			if ((crc & 0x80000000) != 0) { /* test for MSB = bit 31 */
 				crc = (uint32_t)((crc << 1) ^ polynomial);
 			} else {
@@ -313,11 +313,11 @@ void param_set_defaults(struct s_param *p) {
 	//set any params in here
 	p->bind_code = 2188;
 	p->ch_num=5;
-	p->ch[0]=0;
-	p->ch[1]=1;
-	p->ch[2]=2;
-	p->ch[3]=3;
-	p->ch[4]=4;
+	p->ch[0]=0xb2;
+	p->ch[1]=0xb3;
+	p->ch[2]=0xb4;
+	p->ch[3]=0xb5;
+	p->ch[4]=0xb6;
 	p->ppm_pin=PPM_SPONGE;
 	p->mode=MODE_TX;
 
@@ -421,7 +421,7 @@ uint8_t spectrum_req_serialize(uint8_t *target, uint8_t *len) {
 
 void print_hex(const uint8_t *arr,int len) {
 	int i;
-	for (int i = 0; i < len; i ++) {
+	for (i = 0; i < len; i ++) {
 		printf("%02x ", arr[i] & 0xff);
 	}
 }
@@ -624,4 +624,5 @@ int main(int argc, char *argv[])
 	printf("Bye.\n\n");
 	return 0; 
 }
+
 
