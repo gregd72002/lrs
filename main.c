@@ -13,6 +13,8 @@
 #include <getopt.h>
 #include <termios.h>
 
+uint8_t debug=0;
+
 uint8_t uart_path[255] = "/dev/ttyUSB0";
 uint32_t tty_speed=57600;
 uint8_t stop = 0;
@@ -38,8 +40,9 @@ struct s_header {
 	uint8_t id;
 };
 
+
 #define STATUS_ID (0x53)
-#define STATUS_REQ_REMINDER "\x00\x00\xcc\x6d\xfd\x2b"
+#define STATUS_REQ_REMINDER  "\x00\x00\xcc\x6d\xfd\x2b"
 #define STATUS_REQ_REMINDER_LEN 6
 
 #define STATUS_LEN (HEADER_LEN+CRC_LEN+156)
@@ -89,6 +92,8 @@ struct s_status {
 #define RSSI_AS_PWM (0xff)
 #define FAILSAFE_ON (0x01)
 #define FAILSAFE_OFF (0x00)
+
+void print_hex(const uint8_t *arr,int len);
 
 void spectrum_parse(struct s_spectrum *s ,uint8_t *buf) {
 	uint8_t i;
@@ -281,11 +286,14 @@ uint32_t crc32(unsigned char const *addr, size_t num)
 
 int8_t uart_send(uint8_t *buf, uint8_t len) {
 	int ret;
+	if (debug) print_hex(buf,len);
 	ret=write(uart_fd,buf,len);
 	if (ret==-1 && errno==EAGAIN) return 0;
 	if (ret!=len) {
+		if (debug) printf("Error writing to serial!\n");
 		return -1;
 	}
+	if (debug) printf("OK\n");
 	return 0;
 }
 
@@ -315,31 +323,50 @@ int uart_open(const char *path, int flags) {
 	}
 
 	struct termios options;
-	tcgetattr(ret, &options);
+	fcntl(ret, F_SETFL, FNDELAY);                    // Open the device in nonblocking mode
 
-	options.c_cflag &= ~(CSIZE | PARENB);
-	options.c_cflag |= CS8;
-
-
-	options.c_iflag &= ~(IGNBRK | BRKINT | ICRNL |
-			INLCR | PARMRK | INPCK | ISTRIP | IXON);
-
-	options.c_oflag = 0;
-
-
-	options.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN | ISIG);
+	// Set parameters
+	tcgetattr(ret, &options);                        // Get the current options of the port
+	bzero(&options, sizeof(options));               // Clear all the options
 
 	if(cfsetispeed(&options, get_tty_speed(tty_speed)) < 0 || cfsetospeed(&options,
 				get_tty_speed(tty_speed)) < 0) {
 		return -1;
 	}
 
+options.c_cflag = ( CLOCAL | CREAD |  CS8);    // Configure the device : 8 bits, no parity, no control
+//options.c_iflag |= ( IGNPAR | IGNBRK );
+//options.c_cc[VTIME]=0;                          // Timer unused
+//options.c_cc[VMIN]=0;                           // At least on character before satisfy reading
+
+
+//	fcntl(ret, F_SETFL, FNDELAY); 
+
+//	options.c_cflag &= ~(CSIZE | PARENB);
+//	options.c_cflag |= CS8;
+
+
+//	options.c_iflag &= ~(IGNBRK | BRKINT | ICRNL |
+//			INLCR | PARMRK | INPCK | ISTRIP | IXON);
+
+//	options.c_oflag = 0;
+
+
+//	options.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN | ISIG);
+
+	cfmakeraw(&options);
+
 	tcflush(ret, TCIFLUSH);
-	tcsetattr(ret, TCSANOW, &options);
+	if (tcsetattr(ret, TCSANOW, &options) !=0) {
+		printf("Error configuring serial port!\n");
+		return -1;
+	}
+	if (debug) printf("OK\n");
 	return ret; 
 }
 
 void uart_close() {
+	if (debug) printf("Closing serial\n");
 	close(uart_fd);
 }
 
@@ -357,6 +384,52 @@ void param_set_defaults(struct s_param *p) {
 	p->buzzer=BUZZER_ON;
 	p->rssi_ch=RSSI_AS_PWM;
 	p->ppm_mode=PPM_MODE_NORMAL;
+
+}
+
+uint8_t param_from_config(struct s_param *p) {
+	FILE *f;
+	unsigned int val[27];
+    int i=0;
+    int rv;
+    int num_values;
+
+    f=fopen("config.txt","r");
+    if (f==NULL){
+        printf("file config.txt doesn't exist?!\n");
+        return 0;
+    }
+
+    while (i < 27) {
+        rv = fscanf(f, "%x%*[^\n]",&val[i]);
+
+        if (rv != 1) {
+        	printf("Error reading config file!");
+            return 0;
+        }
+
+        printf("%u: %u\n",i,val[i]);
+
+        i++;
+    }
+    fclose(f);
+
+    p->ch_num=val[0];
+    p->ch[0]=val[1];
+	p->ch[1]=val[2];
+	p->ch[2]=val[3];
+	p->ch[3]=val[4];
+	p->ch[4]=val[5];
+	p->mode=val[6];
+	for (i=0;i<16;i++) {
+		p->servo_map[i]=val[i+7];
+	}
+	p->ppm_pin=val[23];
+   	p->bind_code = val[24];
+   	p->buzzer = val[25];
+   	p->ppm_mode = val[26];
+
+    return 1;
 
 }
 
@@ -444,7 +517,7 @@ uint8_t status_req_serialize(uint8_t *target, uint8_t *len) {
 	memcpy(target,PREAMBLE,PREAMBLE_LEN);
 	_len+=PREAMBLE_LEN;
 
-	target[4] = STATUS_ID;
+	target[_len] = STATUS_ID;
 	_len+=1;
 
 	memcpy(target+_len,STATUS_REQ_REMINDER,STATUS_REQ_REMINDER_LEN);
@@ -459,7 +532,7 @@ uint8_t spectrum_req_serialize(uint8_t *target, uint8_t *len) {
 	memcpy(target,PREAMBLE,PREAMBLE_LEN);
 	_len+=PREAMBLE_LEN;
 
-	target[4] = SPECTRUM_ID;
+	target[_len] = SPECTRUM_ID;
 	_len+=1;
 
 	memcpy(target+_len,SPECTRUM_REQ_REMINDER,SPECTRUM_REQ_REMINDER_LEN);
@@ -481,7 +554,7 @@ void print_usage() {
 	printf("Usage: -p [uart_port] -s [speed] -m [mode]\n");
 	printf("\tmode=0 (default) read status\n");
 	printf("\tmode=1 read spectrum\n");
-	printf("\tmode=2 set params\n");
+	printf("\tmode=2 set params from config.txt\n");
 }
 
 int set_defaults(int c, char **a) {
@@ -504,16 +577,20 @@ void request_status() {
 	uint8_t ret;
 	uint8_t buffer[16];
 	status_req_serialize(buffer,&ret);
+	printf("Requesting status...\n");
 	if (uart_send(buffer,ret)) {
 		printf("Error getting status\n");
 		return;
 	}
 }
 
+
+
 void request_spectrum() {
 	uint8_t ret;
 	uint8_t buffer[16];
 	spectrum_req_serialize(buffer,&ret);
+	printf("Requesting spectrum...\n");
 	if (uart_send(buffer,ret)) {
 		printf("Error getting spectrum\n");
 		return;
@@ -528,12 +605,14 @@ int get_packet(uint8_t *buffer, void (*ping)()) {
 	uint32_t crc;
 	int ret;
 
+	uint8_t xx=0;
+
 	while (!stop) {
 		c++;
 		ret = read(uart_fd,buffer+len,BUFFER_LEN-len);
 		if (ret>0) {
 			len+=ret;
-			//printf("Got: %i\n",ret);
+			if (debug) printf("Got: %i\n",ret);
 		} else if (ret<0 && errno == EAGAIN) {
 		} else {
 			perror("Error reading\n");
@@ -592,15 +671,16 @@ int get_packet(uint8_t *buffer, void (*ping)()) {
 		}
 
 		usleep(100000);
-		if (c==5) { //send status request every 0.5s
+		if (c==10) { //send status request every 0.5s
 			c=0;
 			ping();
-			request_status();
 		}	
 	}
 
 	return 0;
 }
+
+
 
 int main(int argc, char *argv[])
 {
@@ -615,7 +695,8 @@ int main(int argc, char *argv[])
 
 	if (set_defaults(argc,argv)) return -1;
 
-	uart_fd = uart_open((const char*)uart_path, O_RDWR | O_NOCTTY | O_SYNC | O_NDELAY | O_NONBLOCK);
+	//uart_fd = uart_open((const char*)uart_path, O_RDWR | O_NOCTTY | O_SYNC | O_NDELAY | O_NONBLOCK);
+	uart_fd = uart_open((const char*)uart_path, O_RDWR | O_NOCTTY | O_NDELAY );
 	if (uart_fd<0) {
 		return -1;
 	}
@@ -626,11 +707,11 @@ int main(int argc, char *argv[])
 		uart_close();
 		return -1;
 	}
-	printf("OK (%i)\n\n",ret);
+	if (debug) printf("OK (%i)\n\n",ret);
 
 	if (mode==2) {
 		param_init(&p);
-		param_set_defaults(&p);
+		param_from_config(&p);
 		param_serialize(&p,buffer,&len);
 
 		printf("Sending params:\n");
@@ -647,7 +728,10 @@ int main(int argc, char *argv[])
 	if (mode==0 || mode==2) {
 		do {
 			ret = get_packet(buffer,request_status);
-			if (ret==PARAM_ID) printf("Param save ok. (%i)\n",ret);
+			if (ret==PARAM_ID) {
+				printf("Param save ok. (%i)\n",ret);
+				printf("REMEMBER to change serial speed if you changed the mode (TX<->RX). For RX use 19200, for TX 57600\n");
+			}
 			else if (ret==STATUS_ID) {
 				printf("Got status (%i)\n",ret);
 				status_parse(&s,buffer);
