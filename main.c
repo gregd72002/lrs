@@ -394,9 +394,9 @@ uint8_t param_from_config(struct s_param *p) {
     int rv;
     int num_values;
 
-    f=fopen("config.txt","r");
+    f=fopen("params.txt","r");
     if (f==NULL){
-        printf("file config.txt doesn't exist?!\n");
+        printf("file params.txt doesn't exist?!\n");
         return 0;
     }
 
@@ -404,7 +404,7 @@ uint8_t param_from_config(struct s_param *p) {
         rv = fscanf(f, "%x%*[^\n]",&val[i]);
 
         if (rv != 1) {
-        	printf("Error reading config file!");
+        	printf("Error reading params file!");
             return 0;
         }
 
@@ -554,7 +554,7 @@ void print_usage() {
 	printf("Usage: -p [uart_port] -s [speed] -m [mode]\n");
 	printf("\tmode=0 (default) read status\n");
 	printf("\tmode=1 read spectrum\n");
-	printf("\tmode=2 set params from config.txt\n");
+	printf("\tmode=2 set params from params.txt\n");
 }
 
 int set_defaults(int c, char **a) {
